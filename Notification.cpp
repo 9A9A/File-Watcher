@@ -92,11 +92,15 @@ TIOContext::~TIOContext ()
    delete m_pOverlapped;
 }
 
-TNotification::TNotification ( TIOContext* ctx , DWORD action , const wstring& filename ) :
+TNotification::TNotification ( TIOContext* ctx , const wstring& filename , DWORD action ) :
    m_pIoContext ( ctx ) ,
    m_Action ( action ) ,
    m_Filename ( filename )
 {
+}
+void TNotification::SetAction ( DWORD action )
+{
+   m_Action = action;
 }
 wstring TNotification::Filename () const
 {

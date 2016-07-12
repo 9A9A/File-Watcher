@@ -11,7 +11,7 @@ using namespace std;
 #define DisableCopyAssignment(Type) Type& operator = (const Type& ) = delete
 #define DisableMoveConstructor(Type) Type(Type&& ) = delete
 #define DisableMoveAssignment(Type) Type& operator = (Type&& ) = delete
-class TIOBasicWorkerThread
+class TIOBasicWorkerThread // базовый класс потока с перегружаемой ThreadRoutine
 {
 protected:
    HANDLE m_hCloseEvent;

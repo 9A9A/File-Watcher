@@ -125,55 +125,60 @@ void TIOCallbackProcessingThread::ThreadRoutine ()
 }
 void CALLBACK TIOCallbackProcessingThread::Cb_ProcessIoContext ( ULONG_PTR lParam )
 {
+   static size_t index = 0;
    auto thrd_ctx = reinterpret_cast< TIOContext::APCForward* >( lParam );
    FILE_NOTIFY_INFORMATION* pInfo = nullptr;
    DWORD dwOffset = 0;
    do 
    {
       pInfo = reinterpret_cast< FILE_NOTIFY_INFORMATION* >( thrd_ctx->m_pBuf + dwOffset );
-      auto pIoCtx = reinterpret_cast< TIOContext* >( thrd_ctx->m_pIoCtx );
-      wstring wFilename ( pInfo->FileName );
-      if ( pInfo->Action == FILE_ACTION_ADDED )
+      if ( pInfo )
       {
-         TNotification notify ( pIoCtx , FILE_ACTION_ADDED , wFilename );
-         if ( pIoCtx->OnAdded )
+         auto pIoCtx = reinterpret_cast< TIOContext* >( thrd_ctx->m_pIoCtx );
+         wstring wFilename ( pInfo->FileName );
+         wprintf ( L"%zd " , index++ );
+         //wcout << index++ << " ";
+         TNotification notify ( pIoCtx , wFilename );
+         switch ( pInfo->Action )
          {
-            pIoCtx->OnAdded ( notify );
+            case FILE_ACTION_ADDED:
+               notify.SetAction ( FILE_ACTION_ADDED );
+               if ( pIoCtx->OnAdded )
+               {
+                  pIoCtx->OnAdded ( notify );
+               }
+               break;
+            case FILE_ACTION_REMOVED:
+               notify.SetAction ( FILE_ACTION_REMOVED );
+               if ( pIoCtx->OnRemoved )
+               {
+                  pIoCtx->OnRemoved ( notify );
+               }
+               break;
+            case FILE_ACTION_MODIFIED:
+               notify.SetAction ( FILE_ACTION_MODIFIED );
+               if ( pIoCtx->OnModified )
+               {
+                  pIoCtx->OnModified ( notify );
+               }
+               break;
+            case FILE_ACTION_RENAMED_OLD_NAME:
+               notify.SetAction ( FILE_ACTION_RENAMED_OLD_NAME );
+               if ( pIoCtx->OnRenamedOld )
+               {
+                  pIoCtx->OnRenamedOld ( notify );
+               }
+               break;
+            case FILE_ACTION_RENAMED_NEW_NAME:
+               notify.SetAction ( FILE_ACTION_RENAMED_NEW_NAME );
+               if ( pIoCtx->OnRenamedNew )
+               {
+                  pIoCtx->OnRenamedNew ( notify );
+               }
+               break;
          }
+         dwOffset += pInfo->NextEntryOffset;
       }
-      else if ( pInfo->Action == FILE_ACTION_REMOVED )
-      {
-         TNotification notify ( pIoCtx , FILE_ACTION_REMOVED , wFilename );
-         if ( pIoCtx->OnRemoved )
-         {
-            pIoCtx->OnRemoved ( notify );
-         }
-      }
-      else if ( pInfo->Action == FILE_ACTION_MODIFIED )
-      {
-         TNotification notify ( pIoCtx , FILE_ACTION_MODIFIED , wFilename );
-         if ( pIoCtx->OnModified )
-         {
-            pIoCtx->OnModified ( notify );
-         }
-      }
-      else if ( pInfo->Action == FILE_ACTION_RENAMED_OLD_NAME )
-      {
-         TNotification notify ( pIoCtx , FILE_ACTION_RENAMED_OLD_NAME , wFilename );
-         if ( pIoCtx->OnRenamedOld )
-         {
-            pIoCtx->OnRenamedOld ( notify );
-         }
-      }
-      else if ( pInfo->Action == FILE_ACTION_RENAMED_NEW_NAME )
-      {
-         TNotification notify ( pIoCtx , FILE_ACTION_RENAMED_NEW_NAME , wFilename );
-         if ( pIoCtx->OnRenamedNew )
-         {
-            pIoCtx->OnRenamedNew ( notify );
-         }
-      }
-      dwOffset += pInfo->NextEntryOffset;
    }
    while ( pInfo->NextEntryOffset != 0 );
    delete [ ] thrd_ctx->m_pBuf;
@@ -230,10 +235,12 @@ void TIOCompletionPortWorker::ThreadRoutine ()
       catch ( runtime_error &err )
       {
          cout << err.what () << endl;
+         break;
       }
       catch ( ... )
       {
          cout << "Nothing to monitor\n";
+         break;
       }
    }
 }

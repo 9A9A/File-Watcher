@@ -47,7 +47,8 @@ class TNotification
    DWORD m_Action;
    TNotification () = delete;
 public:
-   TNotification ( TIOContext* ctx , DWORD action , const wstring& filename );
+   TNotification ( TIOContext* ctx , const wstring& filename , DWORD action = 0 );
+   void SetAction ( DWORD );
    wstring Filename () const;
    DWORD Action () const;
    const TIOContext* IoContext () const;

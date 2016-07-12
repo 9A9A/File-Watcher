@@ -2,30 +2,30 @@
 #include <string>
 void OnAdded ( TNotification& notify )
 {
-   wcout << "[OnAdded] " << notify.Filename () << endl;
+   wprintf ( L"[OnAdded] %ls\n" , notify.Filename ().data () );
 }
 void OnRemoved ( TNotification& notify )
 {
-   wcout << "[OnRemoved] " << notify.Filename () << endl;
+   wprintf ( L"[OnRemoved] %ls\n" , notify.Filename ().data () );
 }
 void OnModified ( TNotification& notify )
 {
-   wcout << "[OnModified] " << notify.Filename () << endl;
+   wprintf ( L"[OnModified] %ls\n" , notify.Filename ().data() );
 }
 void OnRenamedOld ( TNotification& notify )
 {
-   wcout << "[OnRenamedOld] " << notify.Filename () << endl;
+   wprintf ( L"[OnRenamedOld] %ls\n" , notify.Filename ().data () );
 }
 void OnRenamedNew ( TNotification& notify )
 {
-   wcout << "[OnRenamedNew] " << notify.Filename () << endl;
+   wprintf ( L"[OnRenamedNew] %ls\n" , notify.Filename ().data () );
 }
 int main ()
 {
    std::locale current_locale ( "" );
    std::locale::global ( current_locale );
    std::ios::sync_with_stdio ( false );
-   auto ctx = TFileMonitor::instance ().Watch ( "D:\\Sources" );
+   auto ctx = TFileMonitor::instance ().Watch ( "C:\\" );
    if ( ctx )
    {
       ctx->OnAdded = bind ( OnAdded , placeholders::_1 );
