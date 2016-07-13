@@ -6,11 +6,10 @@
 #include"FileMonitor.h"
 #define KB 1024
 using namespace std;
-static const size_t g_IoContextBufSize = 64 * KB;
+static const size_t g_IoContextBufSize = 128 * KB;
 class TNotification;
 class TIOContext
 {
-   LPOVERLAPPED m_pOverlapped;
    LPBYTE m_pBuffer;
    HANDLE m_hFile;
    string m_Filename;
@@ -22,8 +21,9 @@ public:
    void SetExecutionThread ( TIOBasicWorkerThread* pThread );
    HANDLE Handle () const;
    TIOBasicWorkerThread* ExecutionThread ();
-   LPOVERLAPPED Overlapped ();
    void CheckChanges ();
+   void Lock ();
+   void Unlock ();
    string Filename () const;
    BYTE* MakeBufferCopy ();
    virtual ~TIOContext ();
@@ -31,6 +31,32 @@ public:
    {
       void* m_pIoCtx;
       BYTE* m_pBuf;
+   };
+   struct IoOperation : public OVERLAPPED
+   {
+      IoOperation ( size_t optype )
+      {
+         Internal = 0;
+         InternalHigh = 0;
+         Offset = 0;
+         OffsetHigh = 0;
+         Pointer = 0;
+         hEvent = 0;
+         m_OperationType = optype;
+      }
+      size_t m_OperationType;
+      enum
+      {
+         Read,
+         Write,
+         Modified,
+         Deleted,
+         RenamedOld,
+         RenamedNew,
+         Accept,
+         Close,
+         ReadDirectoryChanges
+      };
    };
 
    using CALL_BACK = function<void ( TNotification& )>;

@@ -25,6 +25,7 @@ int main ()
    std::locale current_locale ( "" );
    std::locale::global ( current_locale );
    std::ios::sync_with_stdio ( false );
+
    auto ctx = TFileMonitor::instance ().Watch ( "C:\\" );
    if ( ctx )
    {

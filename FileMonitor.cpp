@@ -43,14 +43,14 @@ bool TCompletionPort::GetIOPacket ( TCompletionPort::TIOContext& context )
 }
 bool TCompletionPort::GetIOPacket ( LPDWORD numOfBytes ,
                                      PULONG_PTR completionKey ,
-                                     OVERLAPPED* overlapped ,
+                                     OVERLAPPED** overlapped ,
                                      DWORD waitTime )
 {
    bool status_t = true;
    if ( NULL == ::GetQueuedCompletionStatus ( m_hCompletionPort ,
         numOfBytes ,
         completionKey ,
-        &overlapped ,
+        overlapped ,
         waitTime )
         )
    {
@@ -163,7 +163,7 @@ TIOContext* TFileMonitor::GetCtx ( size_t index )
 }
 void TFileMonitor::RequestChanges ()
 { 
-   Locker<CriticalSection> lock ( m_CriticalSec );
+//   Locker<CriticalSection> lock ( m_CriticalSec );
    for ( auto &i : m_cpContexts )
    {
       if ( i )

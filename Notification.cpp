@@ -21,14 +21,13 @@ TIOContext::TIOContext ( const string& filename ) :
       throw runtime_error ( HANDLE_OPEN_ERROR + to_string ( ::GetLastError () ) );
    }
    TIOCompletionPortSystem::instance ().RegisterHandle ( m_hFile , ( ULONG_PTR )this );
-   m_pOverlapped = new OVERLAPPED;
-   ::memset ( m_pOverlapped , 0 , sizeof ( OVERLAPPED ) );
    m_pBuffer = new BYTE [ g_IoContextBufSize ];
    ::memset ( m_pBuffer , 0 , sizeof ( BYTE )*g_IoContextBufSize );
 }
 void TIOContext::CheckChanges ()
 {
-   Locker<CriticalSection> lock ( m_locker );
+//   Locker<CriticalSection> lock ( m_locker );
+   auto pOvlpd = new TIOContext::IoOperation ( TIOContext::IoOperation::ReadDirectoryChanges );
    if ( ReadDirectoryChangesW ( m_hFile ,
         m_pBuffer ,
         g_IoContextBufSize ,
@@ -41,7 +40,7 @@ void TIOContext::CheckChanges ()
         FILE_NOTIFY_CHANGE_DIR_NAME |
         FILE_NOTIFY_CHANGE_FILE_NAME ,
         NULL ,
-        m_pOverlapped ,
+        pOvlpd ,
         NULL
         ) )
    {
@@ -49,12 +48,13 @@ void TIOContext::CheckChanges ()
    else
    {
       static const string READ_DIRECTORY_CHANGES_ERROR = "Error occured ReadDirectoryChangesW : ";
+      delete pOvlpd;
       throw runtime_error ( READ_DIRECTORY_CHANGES_ERROR + to_string ( ::GetLastError () ) );
    }
 }
 BYTE* TIOContext::Buffer ()
 {
-   Locker<CriticalSection> lock ( m_locker );
+  // Locker<CriticalSection> lock ( m_locker );
    return m_pBuffer;
 }
 void TIOContext::SetExecutionThread ( TIOBasicWorkerThread* pThread )
@@ -66,10 +66,6 @@ HANDLE TIOContext::Handle () const
 {
    return m_hFile;
 }
-LPOVERLAPPED TIOContext::Overlapped ()
-{
-   return m_pOverlapped;
-}
 TIOBasicWorkerThread* TIOContext::ExecutionThread ()
 {
    return m_pExecutionThread;
@@ -77,6 +73,14 @@ TIOBasicWorkerThread* TIOContext::ExecutionThread ()
 string TIOContext::Filename () const
 {
    return m_Filename;
+}
+void TIOContext::Lock ()
+{
+   m_locker.Lock ();
+}
+void TIOContext::Unlock ()
+{
+   m_locker.Unlock ();
 }
 BYTE* TIOContext::MakeBufferCopy ()
 {
@@ -89,7 +93,6 @@ TIOContext::~TIOContext ()
 {
    ::CloseHandle ( m_hFile );
    delete [ ] m_pBuffer;
-   delete m_pOverlapped;
 }
 
 TNotification::TNotification ( TIOContext* ctx , const wstring& filename , DWORD action ) :
