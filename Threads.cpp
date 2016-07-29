@@ -125,63 +125,7 @@ void TIOCallbackProcessingThread::ThreadRoutine ()
 }
 void CALLBACK TIOCallbackProcessingThread::Cb_ProcessIoContext ( ULONG_PTR lParam )
 {
-   static size_t index = 0;
-   auto thrd_ctx = reinterpret_cast< TIOContext::APCForward* >( lParam );
-   FILE_NOTIFY_INFORMATION* pInfo = nullptr;
-   DWORD dwOffset = 0;
-   do 
-   {
-      pInfo = reinterpret_cast< FILE_NOTIFY_INFORMATION* >( thrd_ctx->m_pBuf + dwOffset );
-      if ( pInfo )
-      {
-         auto pIoCtx = reinterpret_cast< TIOContext* >( thrd_ctx->m_pIoCtx );
-         wstring wFilename ( pInfo->FileName );
-         wprintf ( L"%zd " , index++ );
-         TNotification notify ( pIoCtx , wFilename );
-         switch ( pInfo->Action )
-         {
-            case FILE_ACTION_ADDED:
-               notify.SetAction ( FILE_ACTION_ADDED );
-               if ( pIoCtx->OnAdded )
-               {
-                  pIoCtx->OnAdded ( notify );
-               }
-               break;
-            case FILE_ACTION_REMOVED:
-               notify.SetAction ( FILE_ACTION_REMOVED );
-               if ( pIoCtx->OnRemoved )
-               {
-                  pIoCtx->OnRemoved ( notify );
-               }
-               break;
-            case FILE_ACTION_MODIFIED:
-               notify.SetAction ( FILE_ACTION_MODIFIED );
-               if ( pIoCtx->OnModified )
-               {
-                  pIoCtx->OnModified ( notify );
-               }
-               break;
-            case FILE_ACTION_RENAMED_OLD_NAME:
-               notify.SetAction ( FILE_ACTION_RENAMED_OLD_NAME );
-               if ( pIoCtx->OnRenamedOld )
-               {
-                  pIoCtx->OnRenamedOld ( notify );
-               }
-               break;
-            case FILE_ACTION_RENAMED_NEW_NAME:
-               notify.SetAction ( FILE_ACTION_RENAMED_NEW_NAME );
-               if ( pIoCtx->OnRenamedNew )
-               {
-                  pIoCtx->OnRenamedNew ( notify );
-               }
-               break;
-         }
-         dwOffset += pInfo->NextEntryOffset;
-      }
-   }
-   while ( pInfo->NextEntryOffset != 0 );
-   delete [ ] thrd_ctx->m_pBuf;
-   delete thrd_ctx;
+
 }
 // TIOCompletionPortWorker
 TIOCompletionPortWorker::TIOCompletionPortWorker ( TIOCompletionPortWorker&& rhs ) :
@@ -200,108 +144,58 @@ TIOCompletionPortWorker::~TIOCompletionPortWorker ()
 void TIOCompletionPortWorker::ThreadRoutine ()
 {
    void* pCtx = nullptr;
-   TIOContext::IoOperation* pIoOperation = nullptr;
-   TIOContext* pIoCtx = nullptr;
+   IoContext* pIoCtx = nullptr;
+   LPOVERLAPPED pOvlpd;
    DWORD dwBytes = 0;
-   this->SetPriority ( THREAD_PRIORITY_IDLE );
    while ( m_bThreadRunning && ( WAIT_OBJECT_0 != ::WaitForSingleObject ( m_hCloseEvent , NULL ) ) )
    {
       try
       {
          pCtx = nullptr;
-         TFileMonitor::instance ().RequestChanges ();
-         bool Status_t = TIOCompletionPortSystem::instance ().GetIOPacket ( &dwBytes ,
+         auto Status = TIOCompletionPortSystem::instance ( ).DequeuePacket ( &dwBytes ,
                                                                             ( PULONG_PTR ) &pCtx ,
-                                                                            ( LPOVERLAPPED* ) &pIoOperation ,
-                                                                            INFINITE );
-         if ( pIoOperation )
-         {
-            delete pIoOperation;
-         }
-         if ( !pCtx )
+                                                                             &pOvlpd ,
+                                                                             INFINITE );
+         if ( !pCtx && !pOvlpd )
          {
             break;
          }
-         pIoCtx = reinterpret_cast< TIOContext* >( pCtx );
-         if ( !Status_t || ( Status_t && ( 0 == dwBytes ) ) )
+         pIoCtx = reinterpret_cast< IoContext* >( pCtx );
+         auto pIoAsyncOp = ( IoOperation* ) pOvlpd;
+         if ( pIoAsyncOp )
          {
-            continue;
-         }
-         //
-         pIoCtx->Lock ();
-         static size_t index = 0;
-         FILE_NOTIFY_INFORMATION* pInfo = nullptr;
-         DWORD dwOffset = 0;
-         do
-         {
-            pInfo = reinterpret_cast< FILE_NOTIFY_INFORMATION* >( pIoCtx->Buffer() + dwOffset );
-            if ( pInfo )
+            pIoAsyncOp->Lock ( );
+            if ( Status.m_bResult != 0 )
             {
-               wstring wFilename ( pInfo->FileName );
-               wprintf ( L"%zd " , index++ );
-               TNotification notify ( pIoCtx , wFilename );
-               switch ( pInfo->Action )
+               if ( dwBytes )
                {
-                  case FILE_ACTION_ADDED:
-                     notify.SetAction ( FILE_ACTION_ADDED );
-                     if ( pIoCtx->OnAdded )
-                     {
-                        pIoCtx->OnAdded ( notify );
-                     }
+                  switch ( pIoAsyncOp->m_Code )
+                  {
+                  case IoOperation::ReadDirectoryChanges:
+                     TFileMonitor::IoRequestHandler ( pIoCtx , pIoAsyncOp , dwBytes );
                      break;
-                  case FILE_ACTION_REMOVED:
-                     notify.SetAction ( FILE_ACTION_REMOVED );
-                     if ( pIoCtx->OnRemoved )
-                     {
-                        pIoCtx->OnRemoved ( notify );
-                     }
+                  default:
+                     delete pIoAsyncOp;
                      break;
-                  case FILE_ACTION_MODIFIED:
-                     notify.SetAction ( FILE_ACTION_MODIFIED );
-                     if ( pIoCtx->OnModified )
-                     {
-                        pIoCtx->OnModified ( notify );
-                     }
-                     break;
-                  case FILE_ACTION_RENAMED_OLD_NAME:
-                     notify.SetAction ( FILE_ACTION_RENAMED_OLD_NAME );
-                     if ( pIoCtx->OnRenamedOld )
-                     {
-                        pIoCtx->OnRenamedOld ( notify );
-                     }
-                     break;
-                  case FILE_ACTION_RENAMED_NEW_NAME:
-                     notify.SetAction ( FILE_ACTION_RENAMED_NEW_NAME );
-                     if ( pIoCtx->OnRenamedNew )
-                     {
-                        pIoCtx->OnRenamedNew ( notify );
-                     }
-                     break;
+                  }
                }
-               dwOffset += pInfo->NextEntryOffset;
+               else
+               {
+                  delete pIoAsyncOp;
+               }
+            }
+            else
+            {
+               delete pIoAsyncOp;
             }
          }
-         while ( pInfo->NextEntryOffset != 0 );
-         pIoCtx->Unlock ();
-         //
-
-         //if ( pIoCtx->ExecutionThread () )
-         //{
-         //   auto thrd_ctx = new TIOContext::APCForward;
-         //   thrd_ctx->m_pBuf = pIoCtx->MakeBufferCopy ();
-         //   thrd_ctx->m_pIoCtx = pIoCtx;
-         //   reinterpret_cast< TIOCallbackProcessingThread* >( pIoCtx->ExecutionThread () )->QueueAPC ( ( PAPCFUNC ) &TIOCallbackProcessingThread::Cb_ProcessIoContext ,
-         //                                                                                              ( ULONG_PTR ) thrd_ctx );
-         //}
+         else
+         {
+         }
       }
       catch ( runtime_error &err )
       {
          cout << err.what () << endl;
-         break;
-      }
-      catch ( ... )
-      {
-         cout << "Nothing to monitor\n";
          break;
       }
    }

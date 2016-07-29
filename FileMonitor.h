@@ -5,30 +5,22 @@
 #include "Notification.h"
 #include <unordered_map>
 using namespace std;
-
 class TCompletionPort
 {
-    typedef HANDLE TCompPortHandle;
-    TCompPortHandle m_hCompletionPort;
+   typedef HANDLE TCompPortHandle;
+   TCompPortHandle m_hCompletionPort;
 public:
-    enum COMPLETION_KEY_STATUS
-    {
-        COMPLETION_KEY_NONE = 0 ,
-        COMPLETION_KEY_SHUTDOWN = 1 ,
-    };
-    struct TIOContext
-    {
-        DWORD m_TransferredBytes = 0;
-        ULONG_PTR m_CompletionKey = 0;
-        LPOVERLAPPED m_pOverlapped = 0;
-        DWORD m_WaitDuration = INFINITE;
-    };
-    TCompletionPort ( unsigned long NumOfThreads = 0 );
-    ~TCompletionPort ( );
-    void  RegisterHandle ( HANDLE hDevice , ULONG_PTR completionKey );
-    bool  GetIOPacket ( TCompletionPort::TIOContext& context );
-    bool  PostIOPacket ( DWORD numOfBytes , ULONG_PTR dwCompletionKey , LPOVERLAPPED lpOverlapped );
-    bool  GetIOPacket ( LPDWORD numOfBytes , PULONG_PTR dwCompletionKey , OVERLAPPED** overlapped , DWORD waitTime );
+   struct TIoResult
+   {
+      int m_bResult;
+      DWORD m_dwStatusCode = 0;
+   };
+   TCompletionPort ( unsigned long NumOfThreads = 0 );
+   ~TCompletionPort ( );
+   void RegisterHandle ( HANDLE hDevice , ULONG_PTR completionKey );
+   bool PostIOPacket ( DWORD numOfBytes , ULONG_PTR dwCompletionKey , LPOVERLAPPED lpOverlapped );
+   TCompletionPort::TIoResult DequeuePacket ( LPDWORD numOfBytes , PULONG_PTR dwCompletionKey , OVERLAPPED** overlapped , DWORD waitTime );
+   TCompletionPort::TIoResult DequeuePackets ( LPOVERLAPPED_ENTRY lpCompletionPortEntries , ULONG ulCount , PULONG ulNumEntriesRemoved , DWORD dwMilliseconds , BOOL fAlertable );
 };
 class TIOCompletionPortSystem : public TCompletionPort
 { //
@@ -39,22 +31,31 @@ private:
     TIOCompletionPortSystem ( );
     virtual ~TIOCompletionPortSystem ( );
 };
-class TIOContext;
+class IoContext;
+struct IoOperation;
+class TNotification;
 class TFileMonitor
 {
-   vector<TIOContext*> m_cpContexts;
-   TIOCallbackProcessingThread* m_pCallbackExecutionThread;
-   void ClearContexts ();
-   CriticalSection m_CriticalSec;
-   TFileMonitor ();
-   TFileMonitor ( const string& filename );
-   ~TFileMonitor ();
+   vector<IoContext*> m_pContexts;
+   CriticalSection m_locker;
 public:
-   static TFileMonitor& instance ();
-   TIOContext* Watch ( const string& filename );
-   void Remove ( TIOContext* ctx );
-   void RequestChanges ();
-   TIOContext* GetCtx ( size_t index );
+   TFileMonitor ( ) = default;
+   virtual ~TFileMonitor ( );
+   void Watch ( const string& filename );
+   static void IoRequestHandler ( IoContext* pCtx , IoOperation* pAsyncOp , size_t dwBytes );
+   static void CALLBACK IoRequestProcess ( ULONG_PTR lParam );
+   using TOnIncomingRequest = function<void ( IoContext* pMonitor , IoOperation* pAsyncOp , size_t dwBytes )>;
+   using TOnAdded = function<void ( TNotification& notify )>;
+   using TOnRemoved = function<void ( TNotification& notify )>;
+   using TOnModified = function<void ( TNotification& notify )>;
+   using TOnRenamedOld = function<void ( TNotification& notify )>;
+   using TOnRenamedNew = function<void ( TNotification& notify )>;
 
+   TOnIncomingRequest OnIncomingRequest;
+   TOnAdded OnAdded;
+   TOnRemoved OnRemoved;
+   TOnModified OnModified;
+   TOnRenamedNew OnRenamedNew;
+   TOnRenamedOld OnRenamedOld;
 };
 #endif

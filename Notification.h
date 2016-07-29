@@ -6,77 +6,69 @@
 #include"FileMonitor.h"
 #define KB 1024
 using namespace std;
-static const size_t g_IoContextBufSize = 128 * KB;
 class TNotification;
-class TIOContext
+struct IOBUF
 {
-   LPBYTE m_pBuffer;
+   unsigned long len;
+   char* buf;
+};
+class TFileMonitor;
+class IoContext
+{
    HANDLE m_hFile;
+   TFileMonitor* m_pMonitor;
    string m_Filename;
-   TIOBasicWorkerThread* m_pExecutionThread;
-   CriticalSection m_locker;
 public:
-   TIOContext ( const string& filename );
-   BYTE* Buffer ();
-   void SetExecutionThread ( TIOBasicWorkerThread* pThread );
-   HANDLE Handle () const;
-   TIOBasicWorkerThread* ExecutionThread ();
-   void CheckChanges ();
-   void Lock ();
-   void Unlock ();
-   string Filename () const;
-   BYTE* MakeBufferCopy ();
-   virtual ~TIOContext ();
-   struct APCForward
+   IoContext ( const string& filename , TFileMonitor* pParent );
+   virtual ~IoContext ( );
+   HANDLE Handle ( ) const;
+   void CheckChanges ( );
+   TFileMonitor* Parent ( );
+};
+struct IoOperation : public OVERLAPPED
+{
+   enum IoOpCode
    {
-      void* m_pIoCtx;
-      BYTE* m_pBuf;
+      Read ,
+      Write ,
+      Modified ,
+      Deleted ,
+      RenamedOld ,
+      RenamedNew ,
+      ReadDirectoryChanges
    };
-   struct IoOperation : public OVERLAPPED
+   IoOperation ( IoOpCode code , unsigned long buffer_len = 64 * KB );
+   virtual ~IoOperation ( );
+   IOBUF* m_pBuf;
+   size_t m_Code;
+   void Lock ( )
    {
-      IoOperation ( size_t optype )
-      {
-         Internal = 0;
-         InternalHigh = 0;
-         Offset = 0;
-         OffsetHigh = 0;
-         Pointer = 0;
-         hEvent = 0;
-         m_OperationType = optype;
-      }
-      size_t m_OperationType;
-      enum
-      {
-         Read,
-         Write,
-         Modified,
-         Deleted,
-         RenamedOld,
-         RenamedNew,
-         Accept,
-         Close,
-         ReadDirectoryChanges
-      };
+      m_locker.Lock ( );
+   }
+   void Unlock ( )
+   {
+      m_locker.Unlock ( );
+   }
+   struct APCBypass
+   {
+      IoContext* m_IoCtx;
+      IoOperation* m_IoOp;
+      size_t m_dwBytes;
    };
-
-   using CALL_BACK = function<void ( TNotification& )>;
-   CALL_BACK OnModified;
-   CALL_BACK OnAdded;
-   CALL_BACK OnRemoved;
-   CALL_BACK OnRenamedOld;
-   CALL_BACK OnRenamedNew;
+private:
+   CriticalSection m_locker;
 };
 class TNotification
 {
-   TIOContext* m_pIoContext;
+   IoContext* m_pIoContext;
    wstring m_Filename;
    DWORD m_Action;
    TNotification () = delete;
 public:
-   TNotification ( TIOContext* ctx , const wstring& filename , DWORD action = 0 );
+   TNotification ( IoContext* ctx , const wstring& filename , DWORD action = 0 );
    void SetAction ( DWORD );
    wstring Filename () const;
    DWORD Action () const;
-   const TIOContext* IoContext () const;
+   const IoContext* Context () const;
 };
 #endif
